@@ -10,7 +10,10 @@
   },
   "dependencies": {
     "expo": "~54.0.32",
+    "expo-barcode-scanner": "^13.0.1",
+    "expo-camera": "~17.0.10",
     "expo-status-bar": "~3.0.9",
+    "lucide-react-native": "^0.563.0",
     "react": "19.1.0",
     "react-native": "0.81.5"
   },
