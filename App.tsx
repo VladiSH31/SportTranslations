@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
@@ -40,9 +40,8 @@ const SPORTS: Record<Sport, any> = {
 
 const PRESET_COLORS = ['#000000', '#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#FFFFFF'];
 
-// Helper to determine text color based on team color (for visibility)
 const getVisibleTextColor = (color: string) => {
-  if (color === '#000000') return '#FFFFFF'; // If team color is black, show white text
+  if (color === '#000000') return '#FFFFFF';
   return color;
 };
 
@@ -103,7 +102,7 @@ function SportSelectionScreen({ onSelect }: { onSelect: (sport: Sport) => void }
 }
 
 // ============================================
-// 2. MATCH SETUP (WITH PREVIEW)
+// 2. MATCH SETUP
 // ============================================
 function MatchSetupScreen({ sport, onBack, onStart }: { sport: Sport, onBack: () => void, onStart: (s: MatchSettings) => void }) {
   const [teamA, setTeamA] = useState('AAA');
@@ -129,7 +128,6 @@ function MatchSetupScreen({ sport, onBack, onStart }: { sport: Sport, onBack: ()
         </View>
 
         <ScrollView style={{ padding: 16 }}>
-          {/* PREVIEW SECTION */}
           <View style={styles.previewContainer}>
             <Text style={styles.previewLabel}>ПОПЕРЕДНІЙ ПЕРЕГЛЯД ТАБЛО</Text>
             <View style={styles.compactScoreboardPreview}>
@@ -154,7 +152,6 @@ function MatchSetupScreen({ sport, onBack, onStart }: { sport: Sport, onBack: ()
             </View>
           </View>
 
-          {/* TEAM A SETUP */}
           <View style={styles.setupCard}>
             <Text style={styles.label}>Команда А</Text>
             <TextInput style={styles.input} value={teamA} onChangeText={setTeamA} placeholder="Назва" placeholderTextColor="#64748B" />
@@ -168,7 +165,6 @@ function MatchSetupScreen({ sport, onBack, onStart }: { sport: Sport, onBack: ()
             </TouchableOpacity>
           </View>
 
-          {/* TEAM B SETUP */}
           <View style={styles.setupCard}>
             <Text style={styles.label}>Команда B</Text>
             <TextInput style={styles.input} value={teamB} onChangeText={setTeamB} placeholder="Назва" placeholderTextColor="#64748B" />
@@ -202,17 +198,55 @@ function StreamingScreen({ sport, settings, onBack }: { sport: Sport; settings: 
   const [timerRunning, setTimerRunning] = useState(false);
   const [isLive, setIsLive] = useState(false);
 
+  const [editTimeVisible, setEditTimeVisible] = useState(false);
+  const [tempMinutes, setTempMinutes] = useState('0');
+  const [tempSeconds, setTempSeconds] = useState('0');
+
   useEffect(() => {
     if (!timerRunning) return;
     const id = setInterval(() => setSeconds(s => config.timerMode === 'countdown' ? Math.max(0, s - 1) : s + 1), 1000);
     return () => clearInterval(id);
   }, [timerRunning]);
 
+  const openEditTime = () => {
+    setTempMinutes(Math.floor(seconds / 60).toString());
+    setTempSeconds((seconds % 60).toString());
+    setEditTimeVisible(true);
+  };
+
+  const saveTime = () => {
+    const newSec = parseInt(tempMinutes || '0') * 60 + parseInt(tempSeconds || '0');
+    setSeconds(newSec);
+    setEditTimeVisible(false);
+  };
+
+  // Логіка зміни періоду з діалогом
+  const handlePeriodChange = (newPeriod: number) => {
+    if (newPeriod < 1 || newPeriod > config.periods) return;
+
+    Alert.alert(
+        "Зміна періоду",
+        `Перейти до ${config.periodLabel(newPeriod)}?`,
+        [
+          { text: "Без скидання часу", onPress: () => setPeriod(newPeriod) },
+          {
+            text: "Зі скиданням часу",
+            onPress: () => {
+              setPeriod(newPeriod);
+              setSeconds(config.defaultTime);
+              setTimerRunning(false);
+            },
+            style: "destructive"
+          },
+          { text: "Скасувати", style: "cancel" }
+        ]
+    );
+  };
+
   return (
       <View style={styles.fullscreenContainer}>
         <CameraView style={StyleSheet.absoluteFill} facing="back" mode="video" />
 
-        {/* TOP BAR */}
         <View style={styles.topBar}>
           <TouchableOpacity style={styles.backBtn} onPress={onBack}><Text style={styles.backBtnText}>← SETUP</Text></TouchableOpacity>
           <View style={styles.compactScoreboard}>
@@ -240,7 +274,6 @@ function StreamingScreen({ sport, settings, onBack }: { sport: Sport; settings: 
           </TouchableOpacity>
         </View>
 
-        {/* CONTROLS */}
         <View style={styles.leftControls}>
           {config.scoreButtons.map((p: number) => (
               <TouchableOpacity key={p} style={[styles.scoreBtn, {backgroundColor: settings.colorA}]} onPress={() => setScoreA(s => s + p)}>
@@ -260,13 +293,38 @@ function StreamingScreen({ sport, settings, onBack }: { sport: Sport; settings: 
         </View>
 
         <View style={styles.bottomControls}>
-          <TouchableOpacity style={styles.systemBtn} onPress={() => setTimerRunning(!timerRunning)}><Text style={styles.systemBtnText}>{timerRunning ? '⏸' : '▶'}</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.systemBtn} onPress={openEditTime}>
+            <Text style={styles.systemBtnSubText}>TIME</Text>
+            <Text style={styles.systemBtnText}>⚙</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.systemBtn, timerRunning && styles.systemBtnActive]} onPress={() => setTimerRunning(!timerRunning)}>
+            <Text style={styles.systemBtnText}>{timerRunning ? '⏸' : '▶'}</Text>
+          </TouchableOpacity>
+
           <View style={styles.periodGroup}>
-            <TouchableOpacity style={styles.periodBtn} onPress={() => setPeriod(p => Math.max(1, p-1))}><Text style={styles.periodBtnText}>◀</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.periodBtn} onPress={() => handlePeriodChange(period - 1)}><Text style={styles.periodBtnText}>◀</Text></TouchableOpacity>
             <Text style={styles.periodLabel}>PERIOD</Text>
-            <TouchableOpacity style={styles.periodBtn} onPress={() => setPeriod(p => Math.min(config.periods, p+1))}><Text style={styles.periodBtnText}>▶</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.periodBtn} onPress={() => handlePeriodChange(period + 1)}><Text style={styles.periodBtnText}>▶</Text></TouchableOpacity>
           </View>
         </View>
+
+        <Modal visible={editTimeVisible} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalTitle}>Виставити час</Text>
+              <View style={styles.timeInputRow}>
+                <TextInput style={styles.timeInput} keyboardType="number-pad" value={tempMinutes} onChangeText={setTempMinutes} maxLength={3} />
+                <Text style={styles.timeSeparator}>:</Text>
+                <TextInput style={styles.timeInput} keyboardType="number-pad" value={tempSeconds} onChangeText={setTempSeconds} maxLength={2} />
+              </View>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={[styles.modalBtn, styles.modalBtnCancel]} onPress={() => setEditTimeVisible(false)}><Text style={styles.modalBtnText}>Скасувати</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.modalBtn, styles.modalBtnSave]} onPress={saveTime}><Text style={styles.modalBtnText}>Зберегти</Text></TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
   );
 }
@@ -282,7 +340,6 @@ const styles = StyleSheet.create({
   primaryBtn: { backgroundColor: '#2563EB', padding: 15, borderRadius: 10 },
   primaryBtnText: { color: '#fff', fontWeight: 'bold' },
 
-  // Sport Selection
   sportHeader: { padding: 40, alignItems: 'center' },
   sportTitle: { color: '#FBBF24', fontSize: 28, fontWeight: 'bold' },
   sportSubTitle: { color: '#94A3B8', fontSize: 14, marginTop: 5 },
@@ -291,7 +348,6 @@ const styles = StyleSheet.create({
   sportIcon: { fontSize: 40, marginBottom: 10 },
   sportName: { color: '#fff', fontWeight: '600' },
 
-  // Setup Screen
   setupHeader: { flexDirection: 'row', alignItems: 'center', padding: 20, paddingTop: 50, backgroundColor: '#1E293B' },
   backText: { color: '#3B82F6', marginRight: 20, fontWeight: 'bold' },
   setupTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
@@ -305,12 +361,10 @@ const styles = StyleSheet.create({
   startBtn: { backgroundColor: '#10B981', padding: 20, borderRadius: 15, alignItems: 'center', marginTop: 10, marginBottom: 40 },
   startBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 
-  // Preview
   previewContainer: { backgroundColor: '#1E293B', padding: 15, borderRadius: 15, marginBottom: 15, alignItems: 'center' },
   previewLabel: { color: '#FBBF24', fontSize: 10, fontWeight: 'bold', marginBottom: 15 },
   compactScoreboardPreview: { width: '100%', flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.8)', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
 
-  // Streaming UI
   topBar: { position: 'absolute', top: 15, left: 15, right: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   backBtn: { backgroundColor: 'rgba(0,0,0,0.6)', padding: 10, borderRadius: 8 },
   backBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
@@ -335,11 +389,31 @@ const styles = StyleSheet.create({
   scoreBtnText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
 
   bottomControls: { position: 'absolute', bottom: 25, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 15 },
-  systemBtn: { backgroundColor: 'rgba(51, 65, 85, 0.9)', width: 50, height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  systemBtn: {
+    backgroundColor: 'rgba(51, 65, 85, 0.9)',
+    width: 60,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
   systemBtnActive: { backgroundColor: 'rgba(37, 99, 235, 0.9)' },
-  systemBtnText: { fontSize: 20 },
+  systemBtnText: { fontSize: 20, color: '#FFFFFF', fontWeight: 'bold' },
+  systemBtnSubText: { fontSize: 8, color: '#94A3B8', fontWeight: 'bold', marginBottom: 2 },
   periodGroup: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(51, 65, 85, 0.9)', borderRadius: 12, paddingHorizontal: 5 },
   periodBtn: { padding: 12 },
   periodBtnText: { color: '#fff', fontSize: 18 },
   periodLabel: { color: '#94A3B8', fontSize: 9, fontWeight: 'bold', marginHorizontal: 5 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center' },
+  modalBox: { width: 280, backgroundColor: '#1E293B', padding: 20, borderRadius: 15 },
+  modalTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 15 },
+  timeInputRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  timeInput: { backgroundColor: '#334155', color: '#fff', fontSize: 22, width: 55, textAlign: 'center', borderRadius: 8, padding: 8 },
+  timeSeparator: { color: '#fff', fontSize: 22, marginHorizontal: 5 },
+  modalButtons: { flexDirection: 'row', gap: 10 },
+  modalBtn: { flex: 1, padding: 10, borderRadius: 8, alignItems: 'center' },
+  modalBtnCancel: { backgroundColor: '#64748B' },
+  modalBtnSave: { backgroundColor: '#10B981' },
+  modalBtnText: { color: '#fff', fontWeight: 'bold' },
 });
