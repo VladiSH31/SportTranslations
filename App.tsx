@@ -1,29 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  Alert,
-  Image,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+  StyleSheet, Text, View, TouchableOpacity, ScrollView,
+  TextInput, Alert, Switch, Image, Modal, StatusBar, KeyboardAvoidingView, Platform
 } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useFocusEffect } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { StatusBar } from 'expo-status-bar';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import * as ImagePicker from 'expo-image-picker';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // ============================================
 // TYPES & CONFIG
 // ============================================
 type Sport = 'football' | 'basketball' | 'hockey' | 'volleyball' | 'tennis' | 'padel';
-type Platform = 'facebook' | 'youtube' | 'twitch' | 'rtmp' | 'local';
 
 interface MatchSettings {
+  sport: Sport;
   teamA: string;
   teamB: string;
   colorA: string;
@@ -33,21 +27,10 @@ interface MatchSettings {
 }
 
 interface StreamConfig {
-  platform: Platform;
-  url?: string;
+  platform: 'youtube' | 'twitch' | 'custom';
+  rtmpUrl?: string;
   streamKey?: string;
-  sponsors: string[];
-  breakGraphics: string[];
-}
-
-interface MatchHistoryItem {
-  id: string;
-  teamA: string;
-  teamB: string;
-  colorA: string;
-  colorB: string;
-  date: string;
-  sport: Sport;
+  saveToPhone: boolean;
 }
 
 const SPORTS: Record<Sport, any> = {
@@ -69,218 +52,106 @@ const getVisibleTextColor = (color: string) => {
 const Stack = createStackNavigator();
 
 // ============================================
-// MAIN APP
-// ============================================
-export default function App() {
-  const [permission, requestPermission] = useCameraPermissions();
-
-  if (!permission?.granted) {
-    return (
-        <View style={[styles.container, styles.center]}>
-          <Text style={styles.infoText}>Потрібен дозвіл на камеру</Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={requestPermission}>
-            <Text style={styles.primaryBtnText}>Надати дозвіл</Text>
-          </TouchableOpacity>
-        </View>
-    );
-  }
-
-  return (
-      <NavigationContainer>
-        <StatusBar style="light" />
-        <Stack.Navigator
-            screenOptions={{
-              headerShown: false,
-              cardStyle: { backgroundColor: '#0F172A' },
-            }}
-        >
-          <Stack.Screen name="Welcome" component={WelcomeScreen} />
-          <Stack.Screen name="History" component={HistoryScreen} />
-          <Stack.Screen name="SportSelection" component={SportSelectionScreen} />
-          <Stack.Screen name="MatchSetup" component={MatchSetupScreen} />
-          <Stack.Screen name="PlatformSelection" component={PlatformSelectionScreen} />
-          <Stack.Screen name="StreamConfig" component={StreamConfigScreen} />
-          <Stack.Screen name="Streaming" component={StreamingScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
-  );
-}
-
-// ============================================
-// 1. WELCOME SCREEN (Головна)
+// 1. WELCOME SCREEN
 // ============================================
 function WelcomeScreen({ navigation }: any) {
+  // Дозволяємо обертання на головному екрані
+  useFocusEffect(
+      React.useCallback(() => {
+        ScreenOrientation.unlockAsync();
+      }, [])
+  );
+
   return (
-      <View style={styles.container}>
-        <View style={styles.welcomeHeader}>
-          <Text style={styles.logoText}>
-            SPORT<Text style={styles.logoTextRed}>CAM</Text>
-          </Text>
-          <TouchableOpacity style={styles.settingsBtn}>
-            <Text style={styles.settingsBtnText}>⚙</Text>
-          </TouchableOpacity>
+      <LinearGradient colors={['#0F172A', '#1e1b4b', '#000000']} style={styles.container}>
+        <StatusBar style="light" />
+        <View style={styles.centerContent}>
+          <View style={styles.logoContainer}>
+            <Ionicons name="videocam" size={64} color="#a5b4fc" />
+          </View>
+          <Text style={styles.mainTitle}>SPORT TRANSLATIONS</Text>
+          <Text style={styles.subTitle}>PROFESSIONAL STREAMING TOOL</Text>
+
+          <View style={{ width: '100%', marginTop: 60, gap: 20 }}>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('SportSelection')}>
+              <LinearGradient colors={['#4f46e5', '#4338ca']} style={styles.btnGradient} start={{x:0, y:0}} end={{x:1, y:0}}>
+                <Ionicons name="play" size={24} color="white" style={{ marginRight: 10 }} />
+                <Text style={styles.primaryBtnText}>START NEW STREAM</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.secondaryBtn} onPress={() => navigation.navigate('History')}>
+              <Ionicons name="time-outline" size={24} color="#94A3B8" style={{ marginRight: 10 }} />
+              <Text style={styles.secondaryBtnText}>HISTORY</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-
-        <ScrollView contentContainerStyle={styles.welcomeContent}>
-          <Text style={styles.welcomeHint}>СМ. ПРИКЛАДИ 🔴</Text>
-          <Text style={styles.welcomeHint}>(ВІДЕО КОРИСТУВАЧІВ)</Text>
-
-          <TouchableOpacity
-              style={styles.welcomeCard}
-              onPress={() => navigation.navigate('History')}
-          >
-            <Text style={styles.welcomeCardTitle}>СТВОРИТИ НОВУ ПРЯМУ ТРАНСЛЯЦІЮ</Text>
-            <Text style={styles.welcomeCardSubtitle}>зі своїм підрахунком очок</Text>
-            <View style={styles.welcomePreview}>
-              <View style={styles.welcomeScorePreview}>
-                <Text style={styles.welcomeScoreText}>1 : 3</Text>
-                <Text style={styles.welcomeLiveText}>● LIVE</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.welcomeCard}>
-            <Text style={styles.welcomeCardTitle}>ТРАНСЛЮВАТИ ПОДІЇ RANKEDIN</Text>
-            <Text style={styles.welcomeCardSubtitle}>з підрахунком очок в прямому ефірі</Text>
-            <View style={styles.welcomePreview}>
-              <View style={styles.rankedinPreview}>
-                <Text style={styles.rankedinText}>RANKEDIN</Text>
-                <Text style={styles.welcomeLiveText}>● LIVE</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
+      </LinearGradient>
   );
 }
 
 // ============================================
-// 2. HISTORY SCREEN (Список матчів)
+// 1.1 HISTORY SCREEN (NEW)
 // ============================================
 function HistoryScreen({ navigation }: any) {
-  const [matches] = useState<MatchHistoryItem[]>([
-    { id: '1', teamA: 'VYSH', teamB: 'AVG', colorA: '#000000', colorB: '#94A3B8', date: '24/01/2026', sport: 'basketball' },
-    { id: '2', teamA: 'PER', teamB: 'AVG', colorA: '#000000', colorB: '#3B82F6', date: '24/01/2026', sport: 'basketball' },
-    { id: '3', teamA: 'Pereyaslav', teamB: 'Avangard', colorA: '#3B82F6', colorB: '#10B981', date: '23/01/2026', sport: 'basketball' },
-  ]);
-
   return (
-      <View style={styles.container}>
-        <View style={styles.historyHeader}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backText}>← Назад</Text>
+      <LinearGradient colors={['#0F172A', '#1e1b4b', '#000000']} style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.navigate('Welcome')} style={styles.backIcon}>
+            <Ionicons name="arrow-back" size={24} color="#cbd5e1" />
           </TouchableOpacity>
-          <Text style={styles.historyTitle}>Матчи</Text>
-          <TouchableOpacity style={styles.settingsBtn}>
-            <Text style={styles.settingsBtnText}>⚙</Text>
-          </TouchableOpacity>
+          <Text style={styles.headerTitle}>BROADCAST HISTORY</Text>
         </View>
 
-        <View style={styles.deletedNotice}>
-          <Text style={styles.deletedNoticeText}>УДАЛЕННОЕ ПОДСЧЕТ ОЧКОВ СО второго устройства</Text>
-          <TouchableOpacity style={styles.learnMoreBtn}>
-            <Text style={styles.learnMoreText}>УЗНАТЬ БОЛЬШЕ</Text>
-          </TouchableOpacity>
+        <View style={styles.centerContent}>
+          <Ionicons name="file-tray-outline" size={48} color="#475569" />
+          <Text style={{ color: '#64748B', marginTop: 10 }}>No recent broadcasts</Text>
         </View>
-
-        <TouchableOpacity
-            style={styles.newMatchBtn}
-            onPress={() => navigation.navigate('SportSelection')}
-        >
-          <Text style={styles.newMatchBtnText}>+ ТРАНСЛИРОВАТЬ НОВЫЙ МАТЧ</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.historyLabel}>История</Text>
-
-        <ScrollView style={styles.historyList}>
-          {matches.map((match) => (
-              <TouchableOpacity key={match.id} style={styles.historyCard}>
-                <View style={styles.historyTeamRow}>
-                  <View style={[styles.historyDot, { backgroundColor: match.colorA }]} />
-                  <Text style={styles.historyTeamName}>{match.teamA}</Text>
-                </View>
-                <View style={styles.historyTeamRow}>
-                  <View style={[styles.historyDot, { backgroundColor: match.colorB }]} />
-                  <Text style={styles.historyTeamName}>{match.teamB}</Text>
-                </View>
-                <View style={styles.historyFooter}>
-                  <Text style={styles.historyDate}>📅 {match.date}</Text>
-                </View>
-              </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+      </LinearGradient>
   );
 }
 
 // ============================================
-// 3. SPORT SELECTION
+// 2. SPORT SELECTION
 // ============================================
 function SportSelectionScreen({ navigation }: any) {
   return (
-      <View style={styles.container}>
-        <View style={styles.sportHeader}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backText}>← Назад</Text>
+      <LinearGradient colors={['#0F172A', '#1e1b4b', '#000000']} style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backIcon}>
+            <Ionicons name="arrow-back" size={24} color="#cbd5e1" />
           </TouchableOpacity>
-          <Text style={styles.sportTitle}>Транслювати новий матч</Text>
+          <Text style={styles.headerTitle}>SELECT SPORT</Text>
         </View>
-
-        <View style={styles.stepIndicator}>
-          <View style={[styles.stepCircle, styles.stepCircleActive]}>
-            <Text style={styles.stepNumber}>1</Text>
-          </View>
-          <View style={styles.stepLine} />
-          <View style={styles.stepCircle}>
-            <Text style={styles.stepNumber}>2</Text>
-          </View>
-          <View style={styles.stepLine} />
-          <View style={styles.stepCircle}>
-            <Text style={styles.stepNumber}>3</Text>
-          </View>
-          <View style={styles.stepLine} />
-          <View style={styles.stepCircle}>
-            <Text style={styles.stepNumber}>4</Text>
-          </View>
-        </View>
-
-        <Text style={styles.stepLabel}>Вибрати вид спорту</Text>
 
         <ScrollView contentContainerStyle={styles.sportGrid}>
           {(Object.keys(SPORTS) as Sport[]).map((key) => (
-              <TouchableOpacity
-                  key={key}
-                  style={styles.sportCard}
-                  onPress={() => navigation.navigate('MatchSetup', { sport: key })}
-              >
-                <Text style={styles.sportIcon}>{SPORTS[key].icon}</Text>
-                <Text style={styles.sportName}>{SPORTS[key].name}</Text>
+              <TouchableOpacity key={key} style={styles.sportCard} onPress={() => navigation.navigate('MatchSetup', { sport: key })}>
+                <LinearGradient colors={['#1e293b', '#0f172a']} style={styles.cardGradient}>
+                  <Text style={styles.sportIcon}>{SPORTS[key].icon}</Text>
+                  <Text style={styles.sportName}>{SPORTS[key].name.toUpperCase()}</Text>
+                </LinearGradient>
               </TouchableOpacity>
           ))}
         </ScrollView>
-      </View>
+      </LinearGradient>
   );
 }
 
 // ============================================
-// 4. MATCH SETUP
+// 3. MATCH SETUP
 // ============================================
 function MatchSetupScreen({ route, navigation }: any) {
   const { sport } = route.params;
-  const [teamA, setTeamA] = useState('TEST');
-  const [teamB, setTeamB] = useState('Test');
-  const [colorA, setColorA] = useState('#000000');
-  const [colorB, setColorB] = useState('#94A3B8');
+  const [teamA, setTeamA] = useState('HOME');
+  const [teamB, setTeamB] = useState('GUEST');
+  const [colorA, setColorA] = useState(PRESET_COLORS[2]);
+  const [colorB, setColorB] = useState(PRESET_COLORS[3]);
   const [logoA, setLogoA] = useState<string | null>(null);
   const [logoB, setLogoB] = useState<string | null>(null);
 
   const pickLogo = async (side: 'A' | 'B') => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 1 });
     if (!result.canceled) {
       if (side === 'A') setLogoA(result.assets[0].uri);
       else setLogoB(result.assets[0].uri);
@@ -288,426 +159,287 @@ function MatchSetupScreen({ route, navigation }: any) {
   };
 
   const handleNext = () => {
-    const settings: MatchSettings = {
-      teamA,
-      teamB,
-      colorA,
-      colorB,
-      logoAUri: logoA,
-      logoBUri: logoB,
-    };
-    navigation.navigate('PlatformSelection', { sport, settings });
+    const settings: MatchSettings = { sport, teamA, teamB, colorA, colorB, logoAUri: logoA, logoBUri: logoB };
+    navigation.navigate('PlatformSelection', { matchSettings: settings });
   };
 
   return (
-      <View style={styles.container}>
-        <View style={styles.setupHeader}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backText}>← Назад</Text>
-          </TouchableOpacity>
-          <Text style={styles.setupTitle}>Транслювати новий матч</Text>
-          <TouchableOpacity style={styles.settingsBtn}>
-            <Text style={styles.settingsBtnText}>⚙</Text>
-          </TouchableOpacity>
-        </View>
+      <LinearGradient colors={['#0F172A', '#1e1b4b', '#000000']} style={styles.container}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backIcon}>
+              <Ionicons name="arrow-back" size={24} color="#cbd5e1" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>MATCH SETUP</Text>
+          </View>
 
-        <View style={styles.stepIndicator}>
-          <View style={styles.stepCircleDone}>
-            <Text style={styles.stepCheckmark}>✓</Text>
-          </View>
-          <View style={styles.stepLine} />
-          <View style={[styles.stepCircle, styles.stepCircleActive]}>
-            <Text style={styles.stepNumber}>2</Text>
-          </View>
-          <View style={styles.stepLine} />
-          <View style={styles.stepCircle}>
-            <Text style={styles.stepNumber}>3</Text>
-          </View>
-          <View style={styles.stepLine} />
-          <View style={styles.stepCircle}>
-            <Text style={styles.stepNumber}>4</Text>
-          </View>
-        </View>
-
-        <ScrollView style={{ padding: 16 }}>
-          <View style={styles.previewContainer}>
-            <Text style={styles.previewLabel}>Предварительный просмотр</Text>
-            <View style={styles.previewBox}>
-              <View style={styles.previewScoreboard}>
-                <View style={styles.previewTeam}>
-                  <Text style={styles.previewTeamName}>{teamA}</Text>
-                  <View style={styles.previewLogoBox}>
-                    {logoA ? (
-                        <Image source={{ uri: logoA }} style={styles.previewLogo} />
-                    ) : (
-                        <View style={[styles.previewLogoFallback, { backgroundColor: colorA }]} />
-                    )}
+          <ScrollView style={{ padding: 16 }}>
+            {/* PREVIEW SECTION */}
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionLabel}>SCOREBOARD PREVIEW</Text>
+              <View style={styles.compactScoreboardPreview}>
+                <View style={styles.sbTeam}>
+                  <View style={styles.sbTeamTop}>
+                    {logoA ? <Image source={{ uri: logoA }} style={styles.sbLogo} /> : <View style={[styles.sbLogoFallback, { backgroundColor: colorA }]} />}
+                    <Text style={[styles.sbTeamName, { color: getVisibleTextColor(colorA) }]} numberOfLines={1}>{teamA}</Text>
                   </View>
+                  <Text style={styles.sbScore}>0</Text>
                 </View>
-                <View style={styles.previewCenter}>
-                  <Text style={styles.previewScore}>0 : 0</Text>
-                  <Text style={styles.previewTime}>1st</Text>
-                  <Text style={styles.previewTime}>00:00</Text>
+                <View style={styles.sbCenter}>
+                  <Text style={styles.sbTime}>00:00</Text>
+                  <Text style={styles.sbPeriod}>{SPORTS[sport].periodLabel(1)}</Text>
                 </View>
-                <View style={styles.previewTeam}>
-                  <View style={styles.previewLogoBox}>
-                    {logoB ? (
-                        <Image source={{ uri: logoB }} style={styles.previewLogo} />
-                    ) : (
-                        <View style={[styles.previewLogoFallback, { backgroundColor: colorB }]} />
-                    )}
+                <View style={styles.sbTeam}>
+                  <View style={styles.sbTeamTop}>
+                    <Text style={[styles.sbTeamName, { color: getVisibleTextColor(colorB) }]} numberOfLines={1}>{teamB}</Text>
+                    {logoB ? <Image source={{ uri: logoB }} style={styles.sbLogo} /> : <View style={[styles.sbLogoFallback, { backgroundColor: colorB }]} />}
                   </View>
-                  <Text style={styles.previewTeamName}>{teamB}</Text>
+                  <Text style={styles.sbScore}>0</Text>
                 </View>
               </View>
             </View>
-            <TouchableOpacity>
-              <Text style={styles.previewLink}>👁 ПРЕДВАРИТЕЛЬНЫЙ ПРОСМОТР ТАБЛО РЕЗУЛЬТАТОВ</Text>
-            </TouchableOpacity>
-          </View>
 
-          <View style={styles.setupSection}>
-            <Text style={styles.sectionLabel}>Цвет</Text>
-            <Text style={styles.sectionSubLabel}>Первый игрок / команда</Text>
-            <TextInput
-                style={styles.input}
-                value={teamA}
-                onChangeText={setTeamA}
-                placeholder="Назва команди А"
-                placeholderTextColor="#64748B"
-            />
-            <View style={styles.colorRow}>
-              {PRESET_COLORS.map((c) => (
-                  <TouchableOpacity
-                      key={c}
-                      onPress={() => setColorA(c)}
-                      style={[
-                        styles.colorCircle,
-                        { backgroundColor: c, borderWidth: colorA === c ? 3 : 1, borderColor: colorA === c ? '#FBBF24' : '#334155' },
-                      ]}
-                  />
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.setupSection}>
-            <Text style={styles.sectionSubLabel}>Второй игрок / команда</Text>
-            <TextInput
-                style={styles.input}
-                value={teamB}
-                onChangeText={setTeamB}
-                placeholder="Назва команди B"
-                placeholderTextColor="#64748B"
-            />
-            <View style={styles.colorRow}>
-              {PRESET_COLORS.map((c) => (
-                  <TouchableOpacity
-                      key={c}
-                      onPress={() => setColorB(c)}
-                      style={[
-                        styles.colorCircle,
-                        { backgroundColor: c, borderWidth: colorB === c ? 3 : 1, borderColor: colorB === c ? '#FBBF24' : '#334155' },
-                      ]}
-                  />
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.setupSection}>
-            <Text style={styles.sectionLabel}>Логотипы команды</Text>
-            <View style={styles.logoRow}>
-              <TouchableOpacity style={styles.logoUploadBox} onPress={() => pickLogo('A')}>
-                {logoA ? (
-                    <Image source={{ uri: logoA }} style={styles.logoUploadImage} />
-                ) : (
-                    <>
-                      <Text style={styles.logoUploadPlus}>+</Text>
-                      <Text style={styles.logoUploadText}>Добавить</Text>
-                    </>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.logoUploadBox} onPress={() => pickLogo('B')}>
-                {logoB ? (
-                    <Image source={{ uri: logoB }} style={styles.logoUploadImage} />
-                ) : (
-                    <>
-                      <Text style={styles.logoUploadPlus}>+</Text>
-                      <Text style={styles.logoUploadText}>Добавить</Text>
-                    </>
-                )}
+            {/* TEAM A SETUP */}
+            <View style={styles.setupCard}>
+              <View style={styles.cardHeader}>
+                <View style={[styles.teamIndicator, { backgroundColor: colorA }]} />
+                <Text style={styles.cardTitle}>TEAM A</Text>
+              </View>
+              <TextInput style={styles.input} value={teamA} onChangeText={setTeamA} placeholder="Team Name" placeholderTextColor="#64748B" />
+              <View style={styles.colorRow}>
+                {PRESET_COLORS.map(c => (
+                    <TouchableOpacity key={c} onPress={() => setColorA(c)} style={[styles.colorCircle, { backgroundColor: c, borderWidth: colorA === c ? 2 : 0, borderColor: '#fff' }]} />
+                ))}
+              </View>
+              <TouchableOpacity style={styles.logoBtn} onPress={() => pickLogo('A')}>
+                <Ionicons name={logoA ? "checkmark-circle" : "image-outline"} size={20} color={logoA ? "#10B981" : "#94A3B8"} />
+                <Text style={[styles.logoBtnText, logoA && { color: '#10B981' }]}>{logoA ? 'Logo Uploaded' : 'Upload Logo'}</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity>
-              <Text style={styles.deleteLogoText}>🗑 Удалить</Text>
-            </TouchableOpacity>
-          </View>
 
-          <TouchableOpacity style={styles.nextBtn} onPress={handleNext}>
-            <Text style={styles.nextBtnText}>ДАЛЕЕ</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
+            {/* TEAM B SETUP */}
+            <View style={styles.setupCard}>
+              <View style={styles.cardHeader}>
+                <View style={[styles.teamIndicator, { backgroundColor: colorB }]} />
+                <Text style={styles.cardTitle}>TEAM B</Text>
+              </View>
+              <TextInput style={styles.input} value={teamB} onChangeText={setTeamB} placeholder="Team Name" placeholderTextColor="#64748B" />
+              <View style={styles.colorRow}>
+                {PRESET_COLORS.map(c => (
+                    <TouchableOpacity key={c} onPress={() => setColorB(c)} style={[styles.colorCircle, { backgroundColor: c, borderWidth: colorB === c ? 2 : 0, borderColor: '#fff' }]} />
+                ))}
+              </View>
+              <TouchableOpacity style={styles.logoBtn} onPress={() => pickLogo('B')}>
+                <Ionicons name={logoB ? "checkmark-circle" : "image-outline"} size={20} color={logoB ? "#10B981" : "#94A3B8"} />
+                <Text style={[styles.logoBtnText, logoB && { color: '#10B981' }]}>{logoB ? 'Logo Uploaded' : 'Upload Logo'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleNext}>
+              <LinearGradient colors={['#4f46e5', '#4338ca']} style={styles.btnGradient} start={{x:0, y:0}} end={{x:1, y:0}}>
+                <Text style={styles.primaryBtnText}>CONTINUE</Text>
+                <Ionicons name="arrow-forward" size={20} color="white" style={{ marginLeft: 10 }} />
+              </LinearGradient>
+            </TouchableOpacity>
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
   );
 }
 
 // ============================================
-// 5. PLATFORM SELECTION
+// 4. PLATFORM SELECTION
 // ============================================
 function PlatformSelectionScreen({ route, navigation }: any) {
-  const { sport, settings } = route.params;
+  const { matchSettings } = route.params;
+  const [saveLocal, setSaveLocal] = useState(true);
 
   const platforms = [
-    { id: 'facebook', name: 'Facebook', icon: '📘', color: '#1877F2' },
-    { id: 'youtube', name: 'YouTube', icon: '▶', color: '#FF0000' },
-    { id: 'twitch', name: 'Twitch', icon: '🎮', color: '#9146FF' },
-    { id: 'rtmp', name: 'RTMP', icon: '📡', color: '#FBBF24' },
-    { id: 'local', name: 'СОХРАНИТЬ\nВ ПАМЯТИ', icon: '💾', color: '#000000' },
+    { id: 'youtube', name: 'YouTube Live', icon: 'logo-youtube', color: '#FF0000' },
+    { id: 'twitch', name: 'Twitch', icon: 'logo-twitch', color: '#9146FF' },
+    { id: 'custom', name: 'Custom RTMP', icon: 'server-outline', color: '#3B82F6' },
   ];
 
-  const handlePlatformSelect = (platformId: Platform) => {
-    navigation.navigate('StreamConfig', { sport, settings, platform: platformId });
-  };
-
   return (
-      <View style={styles.container}>
-        <View style={styles.setupHeader}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backText}>← Назад</Text>
+      <LinearGradient colors={['#0F172A', '#1e1b4b', '#000000']} style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backIcon}>
+            <Ionicons name="arrow-back" size={24} color="#cbd5e1" />
           </TouchableOpacity>
-          <Text style={styles.setupTitle}>Транслювати новий матч</Text>
-          <TouchableOpacity style={styles.settingsBtn}>
-            <Text style={styles.settingsBtnText}>⚙</Text>
-          </TouchableOpacity>
+          <Text style={styles.headerTitle}>SELECT PLATFORM</Text>
         </View>
 
-        <View style={styles.stepIndicator}>
-          <View style={styles.stepCircleDone}>
-            <Text style={styles.stepCheckmark}>✓</Text>
-          </View>
-          <View style={styles.stepLine} />
-          <View style={styles.stepCircleDone}>
-            <Text style={styles.stepCheckmark}>✓</Text>
-          </View>
-          <View style={styles.stepLine} />
-          <View style={[styles.stepCircle, styles.stepCircleActive]}>
-            <Text style={styles.stepNumber}>3</Text>
-          </View>
-          <View style={styles.stepLine} />
-          <View style={styles.stepCircle}>
-            <Text style={styles.stepNumber}>4</Text>
-          </View>
-        </View>
-
-        <Text style={styles.stepLabel}>Вибрати платформу, на якій буде осуществляться трансляція</Text>
-
-        <ScrollView contentContainerStyle={styles.platformGrid}>
-          {platforms.map((platform) => (
+        <ScrollView contentContainerStyle={{ padding: 20 }}>
+          {platforms.map(p => (
               <TouchableOpacity
-                  key={platform.id}
-                  style={[styles.platformCard, { backgroundColor: platform.color }]}
-                  onPress={() => handlePlatformSelect(platform.id as Platform)}
+                  key={p.id}
+                  style={styles.platformCard}
+                  onPress={() => navigation.navigate('StreamConfig', { matchSettings, platform: p.id, saveLocal })}
               >
-                <Text style={styles.platformIcon}>{platform.icon}</Text>
-                <Text style={styles.platformName}>{platform.name}</Text>
+                <LinearGradient colors={['#1e293b', '#0f172a']} style={styles.cardGradient} start={{x:0, y:0}} end={{x:1, y:0}}>
+                  <View style={[styles.iconContainer, { backgroundColor: `${p.color}20` }]}>
+                    <Ionicons name={p.icon as any} size={28} color={p.color} />
+                  </View>
+                  <Text style={styles.platformText}>{p.name}</Text>
+                  <Ionicons name="chevron-forward" size={24} color="#475569" style={{ marginLeft: 'auto' }} />
+                </LinearGradient>
               </TouchableOpacity>
           ))}
-        </ScrollView>
 
-        <View style={styles.platformFooter}>
-          <Text style={styles.platformFooterText}>
-            Ви хотите сохранить видео, чтобы поделиться им позже?
-          </Text>
-          <View style={styles.platformToggle}>
-            <Text style={styles.platformToggleText}>
-              Сохранять видео на моем устройстве, пока я веду прямую трансляцию
-            </Text>
-            <View style={styles.toggleSwitch} />
+          <View style={styles.switchContainer}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="save-outline" size={24} color="#94A3B8" style={{ marginRight: 15 }} />
+              <View>
+                <Text style={styles.switchTitle}>Local Recording</Text>
+                <Text style={styles.switchSub}>Save copy to gallery</Text>
+              </View>
+            </View>
+            <Switch
+                value={saveLocal}
+                onValueChange={setSaveLocal}
+                trackColor={{ false: "#334155", true: "#4f46e5" }}
+                thumbColor="white"
+            />
           </View>
-        </View>
-      </View>
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </LinearGradient>
   );
 }
 
 // ============================================
-// 6. STREAM CONFIG
+// 5. STREAM CONFIG
 // ============================================
 function StreamConfigScreen({ route, navigation }: any) {
-  const { sport, settings, platform } = route.params;
+  const { matchSettings, platform, saveLocal } = route.params;
   const [url, setUrl] = useState('');
-  const [streamKey, setStreamKey] = useState('');
-  const [sponsors, setSponsors] = useState<string[]>([]);
-  const [breakGraphics, setBreakGraphics] = useState<string[]>([]);
-
-  const pickSponsorLogo = async () => {
-    if (sponsors.length >= 6) return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 1,
-    });
-    if (!result.canceled) {
-      setSponsors([...sponsors, result.assets[0].uri]);
-    }
-  };
-
-  const pickBreakGraphic = async () => {
-    if (breakGraphics.length >= 4) return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: false,
-      quality: 1,
-    });
-    if (!result.canceled) {
-      setBreakGraphics([...breakGraphics, result.assets[0].uri]);
-    }
-  };
-
-  const handleStart = () => {
-    const streamConfig: StreamConfig = {
-      platform,
-      url,
-      streamKey,
-      sponsors,
-      breakGraphics,
-    };
-    navigation.navigate('Streaming', { sport, settings, streamConfig });
-  };
+  const [key, setKey] = useState('');
 
   return (
-      <View style={styles.container}>
-        <View style={styles.setupHeader}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backText}>← Назад</Text>
-          </TouchableOpacity>
-          <Text style={styles.setupTitle}>Транслювати новий матч</Text>
-          <TouchableOpacity style={styles.settingsBtn}>
-            <Text style={styles.settingsBtnText}>⚙</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.stepIndicator}>
-          <View style={styles.stepCircleDone}>
-            <Text style={styles.stepCheckmark}>✓</Text>
-          </View>
-          <View style={styles.stepLine} />
-          <View style={styles.stepCircleDone}>
-            <Text style={styles.stepCheckmark}>✓</Text>
-          </View>
-          <View style={styles.stepLine} />
-          <View style={styles.stepCircleDone}>
-            <Text style={styles.stepCheckmark}>✓</Text>
-          </View>
-          <View style={styles.stepLine} />
-          <View style={[styles.stepCircle, styles.stepCircleActive]}>
-            <Text style={styles.stepNumber}>4</Text>
-          </View>
-        </View>
-
-        <ScrollView style={{ padding: 16 }}>
-          {platform === 'rtmp' && (
-              <>
-                <View style={styles.configSection}>
-                  <Text style={styles.configLabel}>URL</Text>
-                  <TextInput
-                      style={styles.input}
-                      value={url}
-                      onChangeText={setUrl}
-                      placeholder="rtmp://..."
-                      placeholderTextColor="#64748B"
-                  />
-                </View>
-
-                <View style={styles.configSection}>
-                  <Text style={styles.configLabel}>Ключ трансляції</Text>
-                  <TextInput
-                      style={styles.input}
-                      value={streamKey}
-                      onChangeText={setStreamKey}
-                      placeholder="Ключ трансляції"
-                      placeholderTextColor="#64748B"
-                      secureTextEntry
-                  />
-                </View>
-              </>
-          )}
-
-          <View style={styles.configSection}>
-            <Text style={styles.configLabel}>Добавьте логотипы спонсоров ({sponsors.length} / 6)</Text>
-            <ScrollView horizontal style={styles.sponsorScroll}>
-              {sponsors.map((uri, idx) => (
-                  <View key={idx} style={styles.sponsorBox}>
-                    <Image source={{ uri }} style={styles.sponsorImage} />
-                  </View>
-              ))}
-              {sponsors.length < 6 && (
-                  <TouchableOpacity style={styles.sponsorAddBox} onPress={pickSponsorLogo}>
-                    <Text style={styles.sponsorAddText}>+</Text>
-                  </TouchableOpacity>
-              )}
-            </ScrollView>
-            <TouchableOpacity>
-              <Text style={styles.previewLink}>👁 ПРЕДВАРИТЕЛЬНЫЙ ПРОСМОТР ДОБАВЛЕННЫХ ЛОГОТИПОВ</Text>
+      <LinearGradient colors={['#0F172A', '#1e1b4b', '#000000']} style={styles.container}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backIcon}>
+              <Ionicons name="arrow-back" size={24} color="#cbd5e1" />
             </TouchableOpacity>
+            <Text style={styles.headerTitle}>STREAM CONFIG</Text>
           </View>
 
-          <View style={styles.configSection}>
-            <Text style={styles.configLabel}>Добавить графику в перервах ({breakGraphics.length} / 4)</Text>
-            <ScrollView horizontal style={styles.sponsorScroll}>
-              {breakGraphics.map((uri, idx) => (
-                  <View key={idx} style={styles.graphicBox}>
-                    <Image source={{ uri }} style={styles.graphicImage} />
+          <ScrollView contentContainerStyle={{ padding: 20 }}>
+            <View style={styles.configCard}>
+              <View style={styles.cardHeader}>
+                <Ionicons name="settings-outline" size={20} color="#a5b4fc" style={{ marginRight: 10 }} />
+                <Text style={styles.cardTitle}>RTMP SETTINGS</Text>
+              </View>
+
+              {(platform === 'custom' || platform === 'youtube') && (
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>SERVER URL</Text>
+                    <TextInput
+                        style={styles.input}
+                        value={url}
+                        onChangeText={setUrl}
+                        placeholder="rtmp://..."
+                        placeholderTextColor="#475569"
+                        autoCapitalize="none"
+                    />
                   </View>
-              ))}
-              {breakGraphics.length < 4 && (
-                  <TouchableOpacity style={styles.graphicAddBox} onPress={pickBreakGraphic}>
-                    <Text style={styles.graphicAddText}>+ Коснитесь, чтобы импортировать графику</Text>
-                  </TouchableOpacity>
               )}
-            </ScrollView>
-          </View>
 
-          <TouchableOpacity style={styles.startStreamBtn} onPress={handleStart}>
-            <Text style={styles.startStreamBtnText}>
-              {platform === 'rtmp' ? 'ПРОДОЛЖИТЬ С RTMP' : `ПРОДОЛЖИТЬ С ${platform.toUpperCase()}`}
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>STREAM KEY</Text>
+                <TextInput
+                    style={styles.input}
+                    value={key}
+                    onChangeText={setKey}
+                    secureTextEntry
+                    placeholder="••••••••••••"
+                    placeholderTextColor="#475569"
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity
+                style={[styles.primaryBtn, { marginTop: 30 }]}
+                onPress={() => navigation.navigate('Streaming', { matchSettings, streamConfig: { platform, rtmpUrl: url, streamKey: key, saveToPhone: saveLocal } })}
+            >
+              <LinearGradient colors={['#dc2626', '#991b1b']} style={styles.btnGradient} start={{x:0, y:0}} end={{x:1, y:0}}>
+                <Ionicons name="radio-outline" size={24} color="white" style={{ marginRight: 10 }} />
+                <Text style={styles.primaryBtnText}>GO LIVE</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <View style={{ height: 60 }} />
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
   );
 }
 
 // ============================================
-// 7. STREAMING SCREEN
+// 6. STREAMING SCREEN
 // ============================================
 function StreamingScreen({ route, navigation }: any) {
-  const { sport, settings, streamConfig } = route.params;
-  const config = SPORTS[sport];
+  const { matchSettings, streamConfig } = route.params;
+  const settings = matchSettings as MatchSettings;
+  const config = SPORTS[settings.sport];
+
   const [scoreA, setScoreA] = useState(0);
   const [scoreB, setScoreB] = useState(0);
   const [period, setPeriod] = useState(1);
   const [seconds, setSeconds] = useState(config.defaultTime);
   const [timerRunning, setTimerRunning] = useState(false);
   const [isLive, setIsLive] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false); // Трекер, чи була трансляція
 
   const [editTimeVisible, setEditTimeVisible] = useState(false);
   const [tempMinutes, setTempMinutes] = useState('0');
   const [tempSeconds, setTempSeconds] = useState('0');
 
+  // Жорстка фіксація ландшафту ТІЛЬКИ для цього екрану
   useEffect(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
     return () => {
+      // При виході розблоковуємо орієнтацію
       ScreenOrientation.unlockAsync();
     };
   }, []);
 
   useEffect(() => {
     if (!timerRunning) return;
-    const id = setInterval(
-        () => setSeconds((s) => (config.timerMode === 'countdown' ? Math.max(0, s - 1) : s + 1)),
-        1000
-    );
+    const id = setInterval(() => setSeconds(s => config.timerMode === 'countdown' ? Math.max(0, s - 1) : s + 1), 1000);
     return () => clearInterval(id);
   }, [timerRunning]);
+
+  // Відстежуємо старт трансляції
+  const toggleLive = () => {
+    if (!isLive) {
+      setHasStarted(true);
+    }
+    setIsLive(!isLive);
+  };
+
+  const handleExit = () => {
+    Alert.alert(
+        'Завершити?',
+        'Зупинити трансляцію?',
+        [
+          {text: 'Ні'},
+          {
+            text: 'Так',
+            onPress: () => {
+              if (hasStarted) {
+                // Якщо трансляція була - йдемо в історію
+                navigation.navigate('History');
+              } else {
+                // Якщо не було - назад в налаштування
+                navigation.goBack();
+              }
+            }
+          }
+        ]
+    );
+  };
 
   const openEditTime = () => {
     setTempMinutes(Math.floor(seconds / 60).toString());
@@ -723,34 +455,15 @@ function StreamingScreen({ route, navigation }: any) {
 
   const handlePeriodChange = (newPeriod: number) => {
     if (newPeriod < 1 || newPeriod > config.periods) return;
-
-    Alert.alert('Зміна періоду', `Перейти до ${config.periodLabel(newPeriod)}?`, [
-      { text: 'Без скидання часу', onPress: () => setPeriod(newPeriod) },
-      {
-        text: 'Зі скиданням часу',
-        onPress: () => {
-          setPeriod(newPeriod);
-          setSeconds(config.defaultTime);
-          setTimerRunning(false);
-        },
-        style: 'destructive',
-      },
-      { text: 'Скасувати', style: 'cancel' },
-    ]);
-  };
-
-  const handleBack = () => {
-    Alert.alert('Завершити трансляцію?', 'Ви впевнені, що хочете вийти?', [
-      { text: 'Скасувати', style: 'cancel' },
-      {
-        text: 'Вийти',
-        style: 'destructive',
-        onPress: () => {
-          ScreenOrientation.unlockAsync();
-          navigation.navigate('History');
-        },
-      },
-    ]);
+    Alert.alert(
+        "Зміна періоду",
+        `Перейти до ${config.periodLabel(newPeriod)}?`,
+        [
+          { text: "Без скидання часу", onPress: () => setPeriod(newPeriod) },
+          { text: "Зі скиданням часу", onPress: () => { setPeriod(newPeriod); setSeconds(config.defaultTime); setTimerRunning(false); }, style: "destructive" },
+          { text: "Скасувати", style: "cancel" }
+        ]
+    );
   };
 
   return (
@@ -758,71 +471,50 @@ function StreamingScreen({ route, navigation }: any) {
         <CameraView style={StyleSheet.absoluteFill} facing="back" mode="video" />
 
         <View style={styles.topBar}>
-          <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
-            <Text style={styles.backBtnText}>← BACK</Text>
+          <TouchableOpacity style={styles.backBtn} onPress={handleExit}>
+            <Text style={styles.backBtnText}>← EXIT</Text>
           </TouchableOpacity>
           <View style={styles.compactScoreboard}>
             <View style={styles.sbTeam}>
               <View style={styles.sbTeamTop}>
-                {settings.logoAUri ? (
-                    <Image source={{ uri: settings.logoAUri }} style={styles.sbLogo} />
-                ) : (
-                    <View style={[styles.sbLogoFallback, { backgroundColor: settings.colorA }]} />
-                )}
-                <Text style={[styles.sbTeamName, { color: getVisibleTextColor(settings.colorA) }]} numberOfLines={1}>
-                  {settings.teamA}
-                </Text>
+                {settings.logoAUri ? <Image source={{ uri: settings.logoAUri }} style={styles.sbLogo} /> : <View style={[styles.sbLogoFallback, { backgroundColor: settings.colorA }]} />}
+                <Text style={[styles.sbTeamName, { color: getVisibleTextColor(settings.colorA) }]} numberOfLines={1}>{settings.teamA}</Text>
               </View>
               <Text style={styles.sbScore}>{scoreA}</Text>
             </View>
             <View style={styles.sbCenter}>
-              <Text style={styles.sbTime}>
-                {Math.floor(seconds / 60)
-                    .toString()
-                    .padStart(2, '0')}
-                :{(seconds % 60).toString().padStart(2, '0')}
-              </Text>
+              <Text style={styles.sbTime}>{Math.floor(seconds/60).toString().padStart(2,'0')}:{(seconds%60).toString().padStart(2,'0')}</Text>
               <Text style={styles.sbPeriod}>{config.periodLabel(period)}</Text>
             </View>
             <View style={styles.sbTeam}>
               <View style={styles.sbTeamTop}>
-                <Text style={[styles.sbTeamName, { color: getVisibleTextColor(settings.colorB) }]} numberOfLines={1}>
-                  {settings.teamB}
-                </Text>
-                {settings.logoBUri ? (
-                    <Image source={{ uri: settings.logoBUri }} style={styles.sbLogo} />
-                ) : (
-                    <View style={[styles.sbLogoFallback, { backgroundColor: settings.colorB }]} />
-                )}
+                <Text style={[styles.sbTeamName, { color: getVisibleTextColor(settings.colorB) }]} numberOfLines={1}>{settings.teamB}</Text>
+                {settings.logoBUri ? <Image source={{ uri: settings.logoBUri }} style={styles.sbLogo} /> : <View style={[styles.sbLogoFallback, { backgroundColor: settings.colorB }]} />}
               </View>
               <Text style={styles.sbScore}>{scoreB}</Text>
             </View>
           </View>
-          <TouchableOpacity style={[styles.liveBtn, isLive && styles.liveBtnActive]} onPress={() => setIsLive(!isLive)}>
+          <TouchableOpacity style={[styles.liveBtn, isLive && styles.liveBtnActive]} onPress={toggleLive}>
             <Text style={styles.liveBtnText}>{isLive ? '🔴 LIVE' : '⚪ OFFLINE'}</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.leftControls}>
           {config.scoreButtons.map((p: number) => (
-              <TouchableOpacity key={p} style={[styles.scoreBtn, { backgroundColor: settings.colorA }]} onPress={() => setScoreA((s) => s + p)}>
+              <TouchableOpacity key={p} style={[styles.scoreBtn, {backgroundColor: settings.colorA}]} onPress={() => setScoreA(s => s + p)}>
                 <Text style={styles.scoreBtnText}>+{p}</Text>
               </TouchableOpacity>
           ))}
-          <TouchableOpacity style={styles.scoreBtnMinus} onPress={() => setScoreA((s) => Math.max(0, s - 1))}>
-            <Text style={styles.scoreBtnText}>−</Text>
-          </TouchableOpacity>
+          <TouchableOpacity style={styles.scoreBtnMinus} onPress={() => setScoreA(s => Math.max(0, s - 1))}><Text style={styles.scoreBtnText}>−</Text></TouchableOpacity>
         </View>
 
         <View style={styles.rightControls}>
           {config.scoreButtons.map((p: number) => (
-              <TouchableOpacity key={p} style={[styles.scoreBtn, { backgroundColor: settings.colorB }]} onPress={() => setScoreB((s) => s + p)}>
+              <TouchableOpacity key={p} style={[styles.scoreBtn, {backgroundColor: settings.colorB}]} onPress={() => setScoreB(s => s + p)}>
                 <Text style={styles.scoreBtnText}>+{p}</Text>
               </TouchableOpacity>
           ))}
-          <TouchableOpacity style={styles.scoreBtnMinus} onPress={() => setScoreB((s) => Math.max(0, s - 1))}>
-            <Text style={styles.scoreBtnText}>−</Text>
-          </TouchableOpacity>
+          <TouchableOpacity style={styles.scoreBtnMinus} onPress={() => setScoreB(s => Math.max(0, s - 1))}><Text style={styles.scoreBtnText}>−</Text></TouchableOpacity>
         </View>
 
         <View style={styles.bottomControls}>
@@ -836,13 +528,9 @@ function StreamingScreen({ route, navigation }: any) {
           </TouchableOpacity>
 
           <View style={styles.periodGroup}>
-            <TouchableOpacity style={styles.periodBtn} onPress={() => handlePeriodChange(period - 1)}>
-              <Text style={styles.periodBtnText}>◀</Text>
-            </TouchableOpacity>
+            <TouchableOpacity style={styles.periodBtn} onPress={() => handlePeriodChange(period - 1)}><Text style={styles.periodBtnText}>◀</Text></TouchableOpacity>
             <Text style={styles.periodLabel}>PERIOD</Text>
-            <TouchableOpacity style={styles.periodBtn} onPress={() => handlePeriodChange(period + 1)}>
-              <Text style={styles.periodBtnText}>▶</Text>
-            </TouchableOpacity>
+            <TouchableOpacity style={styles.periodBtn} onPress={() => handlePeriodChange(period + 1)}><Text style={styles.periodBtnText}>▶</Text></TouchableOpacity>
           </View>
         </View>
 
@@ -856,12 +544,8 @@ function StreamingScreen({ route, navigation }: any) {
                 <TextInput style={styles.timeInput} keyboardType="number-pad" value={tempSeconds} onChangeText={setTempSeconds} maxLength={2} />
               </View>
               <View style={styles.modalButtons}>
-                <TouchableOpacity style={[styles.modalBtn, styles.modalBtnCancel]} onPress={() => setEditTimeVisible(false)}>
-                  <Text style={styles.modalBtnText}>Скасувати</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.modalBtn, styles.modalBtnSave]} onPress={saveTime}>
-                  <Text style={styles.modalBtnText}>Зберегти</Text>
-                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalBtn, styles.modalBtnCancel]} onPress={() => setEditTimeVisible(false)}><Text style={styles.modalBtnText}>Скасувати</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.modalBtn, styles.modalBtnSave]} onPress={saveTime}><Text style={styles.modalBtnText}>Зберегти</Text></TouchableOpacity>
               </View>
             </View>
           </View>
@@ -871,309 +555,115 @@ function StreamingScreen({ route, navigation }: any) {
 }
 
 // ============================================
-// STYLES
+// APP NAVIGATION
+// ============================================
+export default function App() {
+  const [permission, requestPermission] = useCameraPermissions();
+
+  if (!permission) return <View />;
+  if (!permission.granted) {
+    return (
+        <View style={[styles.container, styles.center]}>
+          <Text style={styles.infoText}>Потрібен дозвіл на камеру</Text>
+          <TouchableOpacity style={styles.primaryBtn} onPress={requestPermission}>
+            <Text style={styles.primaryBtnText}>Надати дозвіл</Text>
+          </TouchableOpacity>
+        </View>
+    );
+  }
+
+  return (
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Welcome" component={WelcomeScreen} />
+          <Stack.Screen name="History" component={HistoryScreen} />
+          <Stack.Screen name="SportSelection" component={SportSelectionScreen} />
+          <Stack.Screen name="MatchSetup" component={MatchSetupScreen} />
+          <Stack.Screen name="PlatformSelection" component={PlatformSelectionScreen} />
+          <Stack.Screen name="StreamConfig" component={StreamConfigScreen} />
+          <Stack.Screen name="Streaming" component={StreamingScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+  );
+}
+
+// ============================================
+// STYLES (DARK STEEL / SILVER / DEEP PURPLE)
 // ============================================
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
-  fullscreenContainer: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1 },
   center: { justifyContent: 'center', alignItems: 'center' },
-  infoText: { color: '#fff', marginBottom: 20, fontSize: 16 },
-  primaryBtn: { backgroundColor: '#2563EB', padding: 15, borderRadius: 10 },
-  primaryBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 30 },
+  infoText: { color: '#fff', marginBottom: 20 },
 
-  // Welcome Screen
-  welcomeHeader: {
-    backgroundColor: '#FBBF24',
-    padding: 20,
-    paddingTop: 50,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  logoText: { fontSize: 24, fontWeight: 'bold', color: '#000' },
-  logoTextRed: { color: '#DC2626' },
-  settingsBtn: { padding: 5 },
-  settingsBtnText: { fontSize: 24, color: '#000' },
-  welcomeContent: { padding: 20 },
-  welcomeHint: { color: '#94A3B8', fontSize: 11, textAlign: 'center', marginBottom: 5 },
-  welcomeCard: {
-    backgroundColor: '#1E293B',
-    padding: 20,
-    borderRadius: 15,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  welcomeCardTitle: { color: '#fff', fontSize: 14, fontWeight: 'bold', marginBottom: 5 },
-  welcomeCardSubtitle: { color: '#94A3B8', fontSize: 11, marginBottom: 15 },
-  welcomePreview: { backgroundColor: '#0F172A', padding: 20, borderRadius: 10, alignItems: 'center' },
-  welcomeScorePreview: { alignItems: 'center' },
-  welcomeScoreText: { color: '#fff', fontSize: 32, fontWeight: 'bold' },
-  welcomeLiveText: { color: '#EF4444', fontSize: 12, fontWeight: 'bold', marginTop: 5 },
-  rankedinPreview: { alignItems: 'center' },
-  rankedinText: { color: '#fff', fontSize: 24, fontWeight: 'bold' },
+  // HEADERS
+  header: { flexDirection: 'row', alignItems: 'center', padding: 20, paddingTop: 60, backgroundColor: 'transparent' },
+  headerTitle: { color: '#e2e8f0', fontSize: 18, fontWeight: '800', letterSpacing: 1 },
+  backIcon: { marginRight: 20, padding: 5 },
 
-  // History Screen
-  historyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 20,
-    paddingTop: 50,
-    backgroundColor: '#1E293B',
-  },
-  backText: { color: '#3B82F6', fontWeight: 'bold', fontSize: 14 },
-  historyTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-  deletedNotice: {
-    backgroundColor: '#FBBF24',
-    padding: 15,
-    alignItems: 'center',
-  },
-  deletedNoticeText: { color: '#000', fontSize: 11, fontWeight: 'bold', textAlign: 'center', marginBottom: 5 },
-  learnMoreBtn: { backgroundColor: '#DC2626', paddingHorizontal: 20, paddingVertical: 8, borderRadius: 8 },
-  learnMoreText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
-  newMatchBtn: { backgroundColor: '#10B981', margin: 15, padding: 18, borderRadius: 12, alignItems: 'center' },
-  newMatchBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-  historyLabel: { color: '#94A3B8', fontSize: 12, fontWeight: 'bold', paddingHorizontal: 15, marginBottom: 10 },
-  historyList: { flex: 1, paddingHorizontal: 15 },
-  historyCard: {
-    backgroundColor: '#1E293B',
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  historyTeamRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  historyDot: { width: 16, height: 16, borderRadius: 8, marginRight: 10 },
-  historyTeamName: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  historyFooter: { marginTop: 5, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#334155' },
-  historyDate: { color: '#94A3B8', fontSize: 11 },
+  // WELCOME SCREEN
+  logoContainer: { width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  mainTitle: { color: '#fff', fontSize: 32, fontWeight: '900', letterSpacing: 1, textAlign: 'center' },
+  subTitle: { color: '#94a3b8', fontSize: 12, marginTop: 10, letterSpacing: 2, fontWeight: '600' },
 
-  // Sport Selection
-  sportHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-    paddingTop: 50,
-    backgroundColor: '#1E293B',
-  },
-  sportTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginLeft: 15 },
-  stepIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  stepCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#334155',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepCircleActive: { backgroundColor: '#FBBF24' },
-  stepCircleDone: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#10B981',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepNumber: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-  stepCheckmark: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  stepLine: { width: 40, height: 2, backgroundColor: '#334155', marginHorizontal: 5 },
-  stepLabel: { color: '#94A3B8', fontSize: 12, textAlign: 'center', paddingHorizontal: 30, marginBottom: 20 },
-  sportGrid: {
-    padding: 20,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  sportCard: {
-    width: '47%',
-    backgroundColor: '#1E293B',
-    padding: 20,
-    borderRadius: 20,
-    alignItems: 'center',
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  sportIcon: { fontSize: 40, marginBottom: 10 },
-  sportName: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  // BUTTONS
+  primaryBtn: { borderRadius: 12, overflow: 'hidden', elevation: 5, shadowColor: '#4f46e5', shadowOpacity: 0.5, shadowRadius: 10 },
+  btnGradient: { paddingVertical: 16, paddingHorizontal: 24, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 16, letterSpacing: 0.5 },
 
-  // Match Setup
-  setupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 20,
-    paddingTop: 50,
-    backgroundColor: '#1E293B',
-  },
-  setupTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', flex: 1, textAlign: 'center' },
-  previewContainer: {
-    backgroundColor: '#1E293B',
-    padding: 15,
-    borderRadius: 15,
-    marginBottom: 15,
-  },
-  previewLabel: { color: '#FBBF24', fontSize: 11, fontWeight: 'bold', marginBottom: 10 },
-  previewBox: { backgroundColor: '#0F172A', padding: 15, borderRadius: 10, marginBottom: 10 },
-  previewScoreboard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  previewTeam: { flex: 1, alignItems: 'center' },
-  previewTeamName: { color: '#fff', fontSize: 10, fontWeight: 'bold', marginBottom: 5 },
-  previewLogoBox: { width: 40, height: 40, borderRadius: 8, overflow: 'hidden' },
-  previewLogo: { width: '100%', height: '100%' },
-  previewLogoFallback: { width: '100%', height: '100%' },
-  previewCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 10 },
-  previewScore: { color: '#fff', fontSize: 24, fontWeight: 'bold' },
-  previewTime: { color: '#FBBF24', fontSize: 10, fontWeight: 'bold' },
-  previewLink: { color: '#3B82F6', fontSize: 10, textAlign: 'center' },
-  setupSection: { backgroundColor: '#1E293B', padding: 15, borderRadius: 15, marginBottom: 15 },
-  sectionLabel: { color: '#fff', fontSize: 14, fontWeight: 'bold', marginBottom: 10 },
-  sectionSubLabel: { color: '#94A3B8', fontSize: 11, marginBottom: 10 },
-  input: {
-    backgroundColor: '#0F172A',
-    color: '#fff',
-    padding: 12,
-    borderRadius: 10,
-    fontSize: 14,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  colorRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  colorCircle: { width: 35, height: 35, borderRadius: 18 },
-  logoRow: { flexDirection: 'row', gap: 15, marginBottom: 10 },
-  logoUploadBox: {
-    width: 100,
-    height: 100,
-    backgroundColor: '#0F172A',
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#334155',
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoUploadPlus: { color: '#94A3B8', fontSize: 32 },
-  logoUploadText: { color: '#94A3B8', fontSize: 10, marginTop: 5 },
-  logoUploadImage: { width: '100%', height: '100%', borderRadius: 8 },
-  deleteLogoText: { color: '#EF4444', fontSize: 11, textAlign: 'center' },
-  nextBtn: { backgroundColor: '#10B981', padding: 18, borderRadius: 12, alignItems: 'center', marginTop: 10, marginBottom: 40 },
-  nextBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+  secondaryBtn: { backgroundColor: 'rgba(30, 41, 59, 0.5)', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#334155', flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  secondaryBtnText: { color: '#cbd5e1', fontWeight: '700', fontSize: 14, letterSpacing: 0.5 },
 
-  // Platform Selection
-  platformGrid: { padding: 20, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  platformCard: {
-    width: '47%',
-    padding: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  platformIcon: { fontSize: 40, marginBottom: 10 },
-  platformName: { color: '#fff', fontWeight: 'bold', fontSize: 12, textAlign: 'center' },
-  platformFooter: { padding: 20, backgroundColor: '#1E293B', marginTop: 'auto' },
-  platformFooterText: { color: '#94A3B8', fontSize: 11, marginBottom: 10, textAlign: 'center' },
-  platformToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  platformToggleText: { color: '#fff', fontSize: 11, flex: 1 },
-  toggleSwitch: { width: 50, height: 28, backgroundColor: '#334155', borderRadius: 14 },
+  // SPORT SELECTION
+  sportGrid: { padding: 20, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  sportCard: { width: '48%', marginBottom: 15, borderRadius: 16, overflow: 'hidden', elevation: 4 },
+  cardGradient: { padding: 20, alignItems: 'center', justifyContent: 'center', height: 140, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  sportIcon: { fontSize: 42, marginBottom: 12 },
+  sportName: { color: '#e2e8f0', fontWeight: '700', fontSize: 13, letterSpacing: 0.5 },
 
-  // Stream Config
-  configSection: { marginBottom: 20 },
-  configLabel: { color: '#fff', fontSize: 12, fontWeight: 'bold', marginBottom: 10 },
-  sponsorScroll: { marginBottom: 10 },
-  sponsorBox: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#1E293B',
-    borderRadius: 10,
-    marginRight: 10,
-    overflow: 'hidden',
-  },
-  sponsorImage: { width: '100%', height: '100%' },
-  sponsorAddBox: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#334155',
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#64748B',
-    borderStyle: 'dashed',
-  },
-  sponsorAddText: { color: '#94A3B8', fontSize: 32 },
-  graphicBox: {
-    width: 120,
-    height: 80,
-    backgroundColor: '#1E293B',
-    borderRadius: 10,
-    marginRight: 10,
-    overflow: 'hidden',
-  },
-  graphicImage: { width: '100%', height: '100%' },
-  graphicAddBox: {
-    width: 200,
-    height: 80,
-    backgroundColor: '#334155',
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#64748B',
-    borderStyle: 'dashed',
-    paddingHorizontal: 10,
-  },
-  graphicAddText: { color: '#94A3B8', fontSize: 11, textAlign: 'center' },
-  startStreamBtn: {
-    backgroundColor: '#FBBF24',
-    padding: 18,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 40,
-  },
-  startStreamBtnText: { color: '#000', fontWeight: 'bold', fontSize: 14 },
+  // MATCH SETUP
+  sectionContainer: { marginBottom: 25 },
+  sectionLabel: { color: '#94a3b8', fontSize: 11, fontWeight: '700', marginBottom: 10, letterSpacing: 1 },
+  setupCard: { backgroundColor: '#1e293b', borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#334155' },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+  teamIndicator: { width: 4, height: 16, borderRadius: 2, marginRight: 10 },
+  cardTitle: { color: '#fff', fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
 
-  // Streaming Screen (unchanged from original)
-  topBar: {
-    position: 'absolute',
-    top: 15,
-    left: 15,
-    right: 15,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+  input: { backgroundColor: '#0f172a', color: '#fff', padding: 14, borderRadius: 10, fontSize: 16, borderWidth: 1, borderColor: '#334155', marginBottom: 15 },
+  colorRow: { flexDirection: 'row', gap: 12, marginBottom: 15 },
+  colorCircle: { width: 32, height: 32, borderRadius: 16 },
+
+  logoBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0f172a', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#334155', borderStyle: 'dashed' },
+  logoBtnText: { color: '#94a3b8', fontSize: 13, fontWeight: '600', marginLeft: 8 },
+
+  // PREVIEW
+  compactScoreboardPreview: { width: '100%', flexDirection: 'row', backgroundColor: '#000', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#334155' },
+
+  // PLATFORM & CONFIG
+  platformCard: { marginBottom: 15, borderRadius: 16, overflow: 'hidden' },
+  iconContainer: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+  platformText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  switchContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, backgroundColor: '#1e293b', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#334155' },
+  switchTitle: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  switchSub: { color: '#94a3b8', fontSize: 12, marginTop: 2 },
+
+  configCard: { backgroundColor: '#1e293b', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#334155' },
+  inputGroup: { marginTop: 15 },
+  label: { color: '#94a3b8', fontSize: 11, fontWeight: '700', marginBottom: 8, letterSpacing: 0.5 },
+
+  // STREAMING SCREEN (ТВОЇ СТИЛІ - БЕЗ ЗМІН)
+  fullscreenContainer: { flex: 1, backgroundColor: '#000' },
+  topBar: { position: 'absolute', top: 15, left: 15, right: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   backBtn: { backgroundColor: 'rgba(0,0,0,0.6)', padding: 10, borderRadius: 8 },
   backBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-  compactScoreboard: {
-    width: '55%',
-    flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    borderRadius: 12,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
+  compactScoreboard: { width: '55%', flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.8)', borderRadius: 12, padding: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
   sbTeam: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   sbTeamTop: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   sbLogo: { width: 20, height: 20, borderRadius: 4 },
   sbLogoFallback: { width: 20, height: 20, borderRadius: 4 },
   sbTeamName: { fontSize: 10, fontWeight: 'bold', maxWidth: 70 },
-  sbCenter: {
-    flex: 1,
-    alignItems: 'center',
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
+  sbCenter: { flex: 1, alignItems: 'center', borderLeftWidth: 1, borderRightWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   sbScore: { color: '#fff', fontSize: 24, fontWeight: 'bold' },
   sbTime: { color: '#FBBF24', fontSize: 18, fontWeight: 'bold' },
   sbPeriod: { color: '#94A3B8', fontSize: 8, fontWeight: 'bold' },
@@ -1181,94 +671,27 @@ const styles = StyleSheet.create({
   liveBtnActive: { backgroundColor: 'rgba(220, 38, 38, 0.9)' },
   liveBtnText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
 
-  leftControls: {
-    position: 'absolute',
-    left: 20,
-    top: 80,
-    bottom: 80,
-    justifyContent: 'center',
-    gap: 8,
-  },
-  rightControls: {
-    position: 'absolute',
-    right: 20,
-    top: 80,
-    bottom: 80,
-    justifyContent: 'center',
-    gap: 8,
-  },
+  leftControls: { position: 'absolute', left: 20, top: 80, bottom: 80, justifyContent: 'center', gap: 8 },
+  rightControls: { position: 'absolute', right: 20, top: 80, bottom: 80, justifyContent: 'center', gap: 8 },
   scoreBtn: { width: 50, height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  scoreBtnMinus: {
-    backgroundColor: 'rgba(51, 65, 85, 0.9)',
-    width: 50,
-    height: 50,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  scoreBtnMinus: { backgroundColor: 'rgba(51, 65, 85, 0.9)', width: 50, height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   scoreBtnText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
 
-  bottomControls: {
-    position: 'absolute',
-    bottom: 25,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 15,
-  },
-  systemBtn: {
-    backgroundColor: 'rgba(51, 65, 85, 0.9)',
-    width: 60,
-    height: 50,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  bottomControls: { position: 'absolute', bottom: 25, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 15 },
+  systemBtn: { backgroundColor: 'rgba(51, 65, 85, 0.9)', width: 60, height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   systemBtnActive: { backgroundColor: 'rgba(37, 99, 235, 0.9)' },
   systemBtnText: { fontSize: 20, color: '#FFFFFF', fontWeight: 'bold' },
   systemBtnSubText: { fontSize: 8, color: '#94A3B8', fontWeight: 'bold', marginBottom: 2 },
-  periodGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(51, 65, 85, 0.9)',
-    borderRadius: 12,
-    paddingHorizontal: 5,
-  },
+  periodGroup: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(51, 65, 85, 0.9)', borderRadius: 12, paddingHorizontal: 5 },
   periodBtn: { padding: 12 },
   periodBtnText: { color: '#fff', fontSize: 18 },
   periodLabel: { color: '#94A3B8', fontSize: 9, fontWeight: 'bold', marginHorizontal: 5 },
 
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center' },
   modalBox: { width: 280, backgroundColor: '#1E293B', padding: 20, borderRadius: 15 },
-  modalTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 15,
-  },
-  timeInputRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  timeInput: {
-    backgroundColor: '#334155',
-    color: '#fff',
-    fontSize: 22,
-    width: 55,
-    textAlign: 'center',
-    borderRadius: 8,
-    padding: 8,
-  },
+  modalTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 15 },
+  timeInputRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  timeInput: { backgroundColor: '#334155', color: '#fff', fontSize: 22, width: 55, textAlign: 'center', borderRadius: 8, padding: 8 },
   timeSeparator: { color: '#fff', fontSize: 22, marginHorizontal: 5 },
   modalButtons: { flexDirection: 'row', gap: 10 },
   modalBtn: { flex: 1, padding: 10, borderRadius: 8, alignItems: 'center' },
