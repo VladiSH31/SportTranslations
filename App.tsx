@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useContext, createContext } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, ScrollView,
-  TextInput, Alert, Switch, Image, Modal, StatusBar, KeyboardAvoidingView, Platform
+  TextInput, Alert, Switch, Image, Modal, StatusBar, KeyboardAvoidingView, Platform, FlatList
 } from 'react-native';
 import { NavigationContainer, useFocusEffect } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -33,6 +33,17 @@ interface StreamConfig {
   saveToPhone: boolean;
 }
 
+interface HistoryItem {
+  id: string;
+  date: string;
+  sport: Sport;
+  teamA: string;
+  teamB: string;
+  scoreA: number;
+  scoreB: number;
+  duration: string;
+}
+
 const SPORTS: Record<Sport, any> = {
   football: { name: 'Футбол', icon: '⚽', timerMode: 'countup', defaultTime: 0, scoreButtons: [1], periods: 2, periodLabel: (p: number) => (p === 1 ? '1st HALF' : '2nd HALF') },
   basketball: { name: 'Баскетбол', icon: '🏀', timerMode: 'countdown', defaultTime: 600, scoreButtons: [1, 2, 3], periods: 4, periodLabel: (p: number) => `${p} QUARTER` },
@@ -49,13 +60,20 @@ const getVisibleTextColor = (color: string) => {
   return color;
 };
 
+// ============================================
+// CONTEXT FOR HISTORY
+// ============================================
+const HistoryContext = createContext<{
+  history: HistoryItem[];
+  addToHistory: (item: HistoryItem) => void;
+}>({ history: [], addToHistory: () => {} });
+
 const Stack = createStackNavigator();
 
 // ============================================
 // 1. WELCOME SCREEN
 // ============================================
 function WelcomeScreen({ navigation }: any) {
-  // Дозволяємо обертання на головному екрані
   useFocusEffect(
       React.useCallback(() => {
         ScreenOrientation.unlockAsync();
@@ -91,9 +109,37 @@ function WelcomeScreen({ navigation }: any) {
 }
 
 // ============================================
-// 1.1 HISTORY SCREEN (NEW)
+// 1.1 HISTORY SCREEN
 // ============================================
 function HistoryScreen({ navigation }: any) {
+  const { history } = useContext(HistoryContext);
+
+  useFocusEffect(
+      React.useCallback(() => {
+        ScreenOrientation.unlockAsync();
+      }, [])
+  );
+
+  const renderItem = ({ item }: { item: HistoryItem }) => (
+      <View style={styles.historyCard}>
+        <View style={styles.historyHeader}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ fontSize: 20, marginRight: 8 }}>{SPORTS[item.sport].icon}</Text>
+            <Text style={styles.historyDate}>{item.date}</Text>
+          </View>
+          <Text style={styles.historyDuration}>Duration: {item.duration}</Text>
+        </View>
+
+        <View style={styles.historyScoreRow}>
+          <Text style={styles.historyTeam} numberOfLines={1}>{item.teamA}</Text>
+          <View style={styles.historyScoreBox}>
+            <Text style={styles.historyScore}>{item.scoreA} - {item.scoreB}</Text>
+          </View>
+          <Text style={[styles.historyTeam, { textAlign: 'right' }]} numberOfLines={1}>{item.teamB}</Text>
+        </View>
+      </View>
+  );
+
   return (
       <LinearGradient colors={['#0F172A', '#1e1b4b', '#000000']} style={styles.container}>
         <View style={styles.header}>
@@ -103,10 +149,19 @@ function HistoryScreen({ navigation }: any) {
           <Text style={styles.headerTitle}>BROADCAST HISTORY</Text>
         </View>
 
-        <View style={styles.centerContent}>
-          <Ionicons name="file-tray-outline" size={48} color="#475569" />
-          <Text style={{ color: '#64748B', marginTop: 10 }}>No recent broadcasts</Text>
-        </View>
+        {history.length === 0 ? (
+            <View style={styles.centerContent}>
+              <Ionicons name="file-tray-outline" size={48} color="#475569" />
+              <Text style={{ color: '#64748B', marginTop: 10 }}>No recent broadcasts</Text>
+            </View>
+        ) : (
+            <FlatList
+                data={[...history].reverse()}
+                keyExtractor={item => item.id}
+                renderItem={renderItem}
+                contentContainerStyle={{ padding: 20 }}
+            />
+        )}
       </LinearGradient>
   );
 }
@@ -381,6 +436,7 @@ function StreamConfigScreen({ route, navigation }: any) {
 // ============================================
 function StreamingScreen({ route, navigation }: any) {
   const { matchSettings, streamConfig } = route.params;
+  const { addToHistory } = useContext(HistoryContext);
   const settings = matchSettings as MatchSettings;
   const config = SPORTS[settings.sport];
 
@@ -390,7 +446,7 @@ function StreamingScreen({ route, navigation }: any) {
   const [seconds, setSeconds] = useState(config.defaultTime);
   const [timerRunning, setTimerRunning] = useState(false);
   const [isLive, setIsLive] = useState(false);
-  const [hasStarted, setHasStarted] = useState(false); // Трекер, чи була трансляція
+  const [startTime, setStartTime] = useState<Date | null>(null);
 
   const [editTimeVisible, setEditTimeVisible] = useState(false);
   const [tempMinutes, setTempMinutes] = useState('0');
@@ -400,7 +456,6 @@ function StreamingScreen({ route, navigation }: any) {
   useEffect(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
     return () => {
-      // При виході розблоковуємо орієнтацію
       ScreenOrientation.unlockAsync();
     };
   }, []);
@@ -411,34 +466,68 @@ function StreamingScreen({ route, navigation }: any) {
     return () => clearInterval(id);
   }, [timerRunning]);
 
-  // Відстежуємо старт трансляції
-  const toggleLive = () => {
+  // Логіка кнопки LIVE / OFFLINE
+  const handleLiveToggle = () => {
     if (!isLive) {
-      setHasStarted(true);
+      // START STREAM (Broadcast only)
+      setIsLive(true);
+      setStartTime(new Date());
+      // Таймер гри НЕ запускаємо автоматично
+    } else {
+      // STOP STREAM REQUEST
+      confirmStopStream();
     }
-    setIsLive(!isLive);
   };
 
-  const handleExit = () => {
+  // Логіка кнопки EXIT
+  const handleExitPress = () => {
+    if (isLive) {
+      confirmStopStream();
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  const confirmStopStream = () => {
     Alert.alert(
-        'Завершити?',
-        'Зупинити трансляцію?',
+        'Завершити трансляцію?',
+        'Зупинити ефір та зберегти в історію?',
         [
-          {text: 'Ні'},
+          {text: 'Ні', style: 'cancel'},
           {
-            text: 'Так',
-            onPress: () => {
-              if (hasStarted) {
-                // Якщо трансляція була - йдемо в історію
-                navigation.navigate('History');
-              } else {
-                // Якщо не було - назад в налаштування
-                navigation.goBack();
-              }
-            }
+            text: 'Так, завершити',
+            style: 'destructive',
+            onPress: stopStreamAndSave
           }
         ]
     );
+  };
+
+  const stopStreamAndSave = async () => {
+    setIsLive(false);
+    setTimerRunning(false); // Зупиняємо ігровий таймер при завершенні ефіру
+
+    // Формуємо запис для історії (тривалість ефіру)
+    const now = new Date();
+    const durationMs = startTime ? now.getTime() - startTime.getTime() : 0;
+    const durationMin = Math.floor(durationMs / 60000);
+    const durationSec = Math.floor((durationMs % 60000) / 1000);
+
+    const historyItem: HistoryItem = {
+      id: Date.now().toString(),
+      date: now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+      sport: settings.sport,
+      teamA: settings.teamA,
+      teamB: settings.teamB,
+      scoreA: scoreA,
+      scoreB: scoreB,
+      duration: `${durationMin}:${durationSec.toString().padStart(2, '0')}`
+    };
+
+    addToHistory(historyItem);
+
+    await ScreenOrientation.unlockAsync();
+    navigation.navigate('History');
   };
 
   const openEditTime = () => {
@@ -471,7 +560,7 @@ function StreamingScreen({ route, navigation }: any) {
         <CameraView style={StyleSheet.absoluteFill} facing="back" mode="video" />
 
         <View style={styles.topBar}>
-          <TouchableOpacity style={styles.backBtn} onPress={handleExit}>
+          <TouchableOpacity style={styles.backBtn} onPress={handleExitPress}>
             <Text style={styles.backBtnText}>← EXIT</Text>
           </TouchableOpacity>
           <View style={styles.compactScoreboard}>
@@ -494,7 +583,7 @@ function StreamingScreen({ route, navigation }: any) {
               <Text style={styles.sbScore}>{scoreB}</Text>
             </View>
           </View>
-          <TouchableOpacity style={[styles.liveBtn, isLive && styles.liveBtnActive]} onPress={toggleLive}>
+          <TouchableOpacity style={[styles.liveBtn, isLive && styles.liveBtnActive]} onPress={handleLiveToggle}>
             <Text style={styles.liveBtnText}>{isLive ? '🔴 LIVE' : '⚪ OFFLINE'}</Text>
           </TouchableOpacity>
         </View>
@@ -555,10 +644,15 @@ function StreamingScreen({ route, navigation }: any) {
 }
 
 // ============================================
-// APP NAVIGATION
+// APP NAVIGATION & PROVIDER
 // ============================================
 export default function App() {
   const [permission, requestPermission] = useCameraPermissions();
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+
+  const addToHistory = (item: HistoryItem) => {
+    setHistory(prev => [...prev, item]);
+  };
 
   if (!permission) return <View />;
   if (!permission.granted) {
@@ -573,17 +667,19 @@ export default function App() {
   }
 
   return (
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="Welcome" component={WelcomeScreen} />
-          <Stack.Screen name="History" component={HistoryScreen} />
-          <Stack.Screen name="SportSelection" component={SportSelectionScreen} />
-          <Stack.Screen name="MatchSetup" component={MatchSetupScreen} />
-          <Stack.Screen name="PlatformSelection" component={PlatformSelectionScreen} />
-          <Stack.Screen name="StreamConfig" component={StreamConfigScreen} />
-          <Stack.Screen name="Streaming" component={StreamingScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
+      <HistoryContext.Provider value={{ history, addToHistory }}>
+        <NavigationContainer>
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="Welcome" component={WelcomeScreen} />
+            <Stack.Screen name="History" component={HistoryScreen} />
+            <Stack.Screen name="SportSelection" component={SportSelectionScreen} />
+            <Stack.Screen name="MatchSetup" component={MatchSetupScreen} />
+            <Stack.Screen name="PlatformSelection" component={PlatformSelectionScreen} />
+            <Stack.Screen name="StreamConfig" component={StreamConfigScreen} />
+            <Stack.Screen name="Streaming" component={StreamingScreen} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </HistoryContext.Provider>
   );
 }
 
@@ -613,6 +709,16 @@ const styles = StyleSheet.create({
 
   secondaryBtn: { backgroundColor: 'rgba(30, 41, 59, 0.5)', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#334155', flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   secondaryBtnText: { color: '#cbd5e1', fontWeight: '700', fontSize: 14, letterSpacing: 0.5 },
+
+  // HISTORY
+  historyCard: { backgroundColor: '#1e293b', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#334155' },
+  historyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)', paddingBottom: 8 },
+  historyDate: { color: '#94a3b8', fontSize: 12, fontWeight: '600' },
+  historyDuration: { color: '#10B981', fontSize: 12, fontWeight: '700' },
+  historyScoreRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  historyTeam: { color: '#fff', fontSize: 14, fontWeight: '700', flex: 1 },
+  historyScoreBox: { backgroundColor: '#0f172a', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, marginHorizontal: 10 },
+  historyScore: { color: '#FBBF24', fontSize: 16, fontWeight: '800' },
 
   // SPORT SELECTION
   sportGrid: { padding: 20, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
@@ -652,7 +758,7 @@ const styles = StyleSheet.create({
   inputGroup: { marginTop: 15 },
   label: { color: '#94a3b8', fontSize: 11, fontWeight: '700', marginBottom: 8, letterSpacing: 0.5 },
 
-  // STREAMING SCREEN (ТВОЇ СТИЛІ - БЕЗ ЗМІН)
+  // STREAMING SCREEN
   fullscreenContainer: { flex: 1, backgroundColor: '#000' },
   topBar: { position: 'absolute', top: 15, left: 15, right: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   backBtn: { backgroundColor: 'rgba(0,0,0,0.6)', padding: 10, borderRadius: 8 },
