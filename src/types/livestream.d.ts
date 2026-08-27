@@ -1,0 +1,1 @@
+declare module '@api.video/react-native-livestream';

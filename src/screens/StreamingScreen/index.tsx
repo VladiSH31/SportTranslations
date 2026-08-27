@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, Alert, StyleSheet } from 'react-native';
-import { CameraView } from 'expo-camera';
+import { LiveStreamView } from '@api.video/react-native-livestream';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { globalStyles } from '../../styles/globalStyles';
 import { SPORTS } from '../../constants/sports';
@@ -10,10 +10,13 @@ import ScoreboardPreview from '../../components/ScoreboardPreview';
 import EditTimeModal from './EditTimeModal';
 
 export default function StreamingScreen({ route, navigation }: any) {
-    const { matchSettings } = route.params;
+    const { matchSettings, streamConfig } = route.params;
+    const { rtmpUrl, streamKey, saveToPhone } = streamConfig;
     const { addToHistory } = useHistory();
     const settings = matchSettings as MatchSettings;
     const config = SPORTS[settings.sport];
+
+    const streamRef = useRef<any>(null);
 
     const [scoreA, setScoreA] = useState(0);
     const [scoreB, setScoreB] = useState(0);
@@ -42,10 +45,23 @@ export default function StreamingScreen({ route, navigation }: any) {
 
     const handleLiveToggle = () => {
         if (!isLive) {
-            setIsLive(true);
-            setStartTime(new Date());
+            startStream();
         } else {
             confirmStopStream();
+        }
+    };
+
+    const startStream = () => {
+        if (!rtmpUrl || !streamKey) {
+            Alert.alert('Помилка', 'RTMP URL або Stream Key не задані. Поверніться на екран налаштувань стріму.');
+            return;
+        }
+        try {
+            streamRef.current?.startStreaming(streamKey, rtmpUrl);
+            setIsLive(true);
+            setStartTime(new Date());
+        } catch (e: any) {
+            Alert.alert('Помилка запуску трансляції', e?.message ?? 'Невідома помилка');
         }
     };
 
@@ -65,6 +81,11 @@ export default function StreamingScreen({ route, navigation }: any) {
     };
 
     const stopStreamAndSave = async () => {
+        try {
+            streamRef.current?.stopStreaming();
+        } catch (e) {
+            // ignore stop errors
+        }
         setIsLive(false);
         setTimerRunning(false);
 
@@ -114,7 +135,33 @@ export default function StreamingScreen({ route, navigation }: any) {
 
     return (
         <View style={styles.fullscreenContainer}>
-            <CameraView style={StyleSheet.absoluteFill} facing="back" mode="video" />
+            <LiveStreamView
+                ref={streamRef}
+                style={StyleSheet.absoluteFill}
+                camera="back"
+                enablePinchedZoom={true}
+                video={{
+                    fps: 30,
+                    resolution: '720p',
+                    bitrate: 2 * 1024 * 1024,
+                    orientation: 'landscape',
+                }}
+                audio={{
+                    bitrate: 128000,
+                    sampleRate: 44100,
+                    isStereo: true,
+                }}
+                isMuted={false}
+                onConnectionSuccess={() => console.log('RTMP: connected')}
+                onConnectionFailed={(reason: string) => {
+                    Alert.alert('Помилка з’єднання', reason);
+                    setIsLive(false);
+                }}
+                onDisconnect={() => {
+                    console.log('RTMP: disconnected');
+                    setIsLive(false);
+                }}
+            />
 
             <View style={styles.topBar}>
                 <TouchableOpacity style={styles.backBtn} onPress={handleExitPress}>

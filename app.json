@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "SportTranslations",
-    "slug": "SportTranslations",
+    "slug": "vladish",
     "version": "1.0.0",
     "orientation": "landscape",
     "icon": "./assets/icon.png",
@@ -21,13 +21,26 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.anonymous.SportTranslations"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-barcode-scanner"
-    ]
+      "expo-barcode-scanner",
+      "expo-camera",
+      "expo-image-picker"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "27fab995-a6ee-4749-bcff-5bbb6456a009"
+      }
+    },
+    "owner": "vladishs-team"
   }
 }
